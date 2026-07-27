@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # App — Dashboard + API REST + WebSocket
+  # ==========================================
+  sia-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sia-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-SiaRedis2026!}
+      - DB_PATH=/storage/auditoria.db
+      - STORAGE_PATH=/storage
+      - SIMULATION_MODE=${SIMULATION_MODE:-false}
+      # Email — apunta a Mailpit en dev, a SMTP real en producción
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+    env_file:
+      - .env
+    volumes:
+      - app_storage:/storage
+      - ./credentials:/credentials:ro
+      - ./templates:/app/templates:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    networks:
+      - sia-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+  # ==========================================
+  # Workers — Playwright + BullMQ Processors
+  # ==========================================
+  sia-workers:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    container_name: sia-workers
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-SiaRedis2026!}
+      - DB_PATH=/storage/auditoria.db
+      - STORAGE_PATH=/storage
+      - SIMULATION_MODE=${SIMULATION_MODE:-false}
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+    env_file:
+      - .env
+    volumes:
+      - app_storage:/storage
+      - ./credentials:/credentials:ro
+      - ./templates:/app/templates:ro
+      - worker_downloads:/app/downloads
+      - worker_screenshots:/app/screenshots
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - sia-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+
+  # ==========================================
+  # Redis — Motor de Colas Persistente
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: sia-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-SiaRedis2026!}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - sia-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SiaRedis2026!}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Mailpit — Servidor SMTP de Pruebas
+  # Interfaz web: http://localhost:8025
+  # SMTP interno: mailpit:1025
+  # ==========================================
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: sia-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # Web UI para ver correos capturados
+      - "1025:1025"   # Puerto SMTP (solo accesible internamente)
+    environment:
+      - MP_MAX_MESSAGES=200
+      - MP_UI_AUTH_FILE=""
+    networks:
+      - sia-network
+
+  # ==========================================
+  # Nginx — Reverse Proxy
+  # ==========================================
+  nginx:
+    image: nginx:alpine
+    container_name: sia-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      sia-app:
+        condition: service_healthy
+    networks:
+      - sia-network
+
+volumes:
+  redis_data:
+    driver: local
+  app_storage:
+    driver: local
+  worker_downloads:
+    driver: local
+  worker_screenshots:
+    driver: local
+
+networks:
+  sia-network:
+    driver: bridge

@@ -1,0 +1,51 @@
+# Dependencias
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# Variables de entorno (NUNCA subir al repo)
+.env
+.env.local
+.env.*.local
+
+# Credenciales (NUNCA subir al repo)
+credentials/
+*.pem
+*.key
+*.p12
+*.json.bak
+
+# Base de datos local
+storage/
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+logs/
+
+# Archivos de trabajo temporal
+screenshots/
+downloads/
+proc_output.txt
+n8n_output.txt
+extract.ps1
+
+# Videos y archivos pesados
+*.mp4
+*.avi
+*.mkv
+*.zip
+*.gz
+
+# Archivos de Office locales (los templates se suben, no los docs de trabajo)
+~$*.docx
+~$*.xlsx
+*.tmp
+
+# IDE y OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

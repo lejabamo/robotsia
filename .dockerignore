@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+storage/*
+!storage/.gitkeep
+downloads/*
+!downloads/.gitkeep
+screenshots/*
+!screenshots/.gitkeep
+credentials/*
+!credentials/.gitkeep

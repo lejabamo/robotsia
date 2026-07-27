@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Plan de Trabajo Oficial — Agente SIA Observa</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm;
+    }
+    body {
+      font-family: 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.6;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      border-bottom: 2px solid #3b82f6;
+      padding-bottom: 15px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-logo {
+      font-weight: 800;
+      font-size: 14pt;
+      color: #1e3a8a;
+      letter-spacing: -0.5px;
+    }
+    .header-meta {
+      text-align: right;
+      font-size: 9pt;
+      color: #64748b;
+    }
+    h1 {
+      font-size: 26pt;
+      font-weight: 800;
+      color: #1e3a8a;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      margin: 0 0 15px 0;
+    }
+    .intro-text {
+      font-size: 11.5pt;
+      color: #475569;
+      margin-bottom: 30px;
+      text-align: justify;
+    }
+    h2 {
+      font-size: 16pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 35px;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 6px;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12.5pt;
+      font-weight: 600;
+      color: #1e293b;
+      margin-top: 25px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+    p {
+      font-size: 10pt;
+      margin-top: 0;
+      margin-bottom: 12px;
+      text-align: justify;
+    }
+    ul, ol {
+      margin-top: 0;
+      margin-bottom: 15px;
+      padding-left: 20px;
+    }
+    li {
+      font-size: 10pt;
+      margin-bottom: 6px;
+    }
+    .mockup-container {
+      text-align: center;
+      margin: 25px 0;
+      page-break-inside: avoid;
+    }
+    .mockup-img {
+      width: 100%;
+      max-width: 650px;
+      height: auto;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .caption {
+      font-size: 8.5pt;
+      color: #64748b;
+      margin-top: 8px;
+      font-style: italic;
+    }
+    
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th {
+      background-color: #f8fafc;
+      color: #1e293b;
+      font-weight: 600;
+      border: 1px solid #e2e8f0;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    td {
+      border: 1px solid #e2e8f0;
+      padding: 10px 14px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td {
+      background-color: #f8fafc;
+    }
+    
+    /* Diagrams style */
+    .diagram-box {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 15px;
+      font-family: 'Consolas', 'Courier New', Courier, monospace;
+      font-size: 9pt;
+      color: #334155;
+      margin: 20px 0;
+      white-space: pre;
+      line-height: 1.35;
+      page-break-inside: avoid;
+    }
+
+    /* Cards for Steps */
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .step-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      page-break-inside: avoid;
+    }
+    .step-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-weight: 700;
+      font-size: 10.5pt;
+      color: #1e3a8a;
+    }
+    .step-badge {
+      background-color: #dbeafe;
+      color: #1e40af;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">🏛️ GOBERNACIÓN DEL CAUCA</div>
+    <div class="header-meta">
+      <strong>Proyecto:</strong> Agente SIA Observa v2.0<br>
+      <strong>Fecha:</strong> 22 de Julio de 2026
+    </div>
+  </div>
+
+  <h1>Plan de Trabajo Oficial:<br>Agente de Automatización SIA Observa</h1>
+  
+  <p class="intro-text">
+    Este documento detalla la planificación estratégica, arquitectura, diagrama de componentes y secuencia para el despliegue del agente de automatización desarrollado para la Gobernación del Cauca. Diseñado como un software modular y libre de licenciamiento comercial (licencias MIT y Apache 2.0), el agente integra colas BullMQ, workers Playwright y modelos de lenguaje de OpenAI (GPT-4o) para realizar de forma autónoma el procedimiento de descarga, validación, compresión, carga de evidencias contractuales y generación de certificados SIA Observa.
+  </p>
+
+  <h2>1. Mockup del Dashboard de Supervisión</h2>
+  <p>
+    El agente funciona bajo un esquema híbrido de automatización con control humano. Los supervisores autorizan los procesos clave y validan las cargas a través de la siguiente interfaz en tiempo real:
+  </p>
+  <div class="mockup-container">
+    <img src="C:\Users\jefes\&period;gemini\antigravity-ide\brain\acd2cf35-7da3-4cb4-bb89-30416d9241a7\dashboard_mockup_1784737126362.png" alt="Dashboard de Supervisión" class="mockup-img">
+    <div class="caption">Imagen 1: Panel de Control Premium y Telemetría en Tiempo Real del Agente SIA Observa.</div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>2. Arquitectura del Agente y Componentes</h2>
+  <p>
+    El sistema implementa una arquitectura desacoplada y distribuida basada en contenedores Docker para garantizar la estabilidad y escalabilidad del servicio:
+  </p>
+
+  <div class="diagram-box">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       CAPA DE PRESENTACIÓN (SUPERVISOR)                     │
+│  - Dashboard Web SPA (HTML5/CSS3/JS)                                       │
+│  - WebSockets (Actualizaciones de avance en tiempo real)                     │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ (API REST & WebSockets)
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                         CAPA LÓGICA (SERVIDOR EXPRESS)                      │
+│  - Servidor de API, Controladores de Aprobación, JWT Auth & Roles           │
+│  - Máquina de Estados (Validación de Transiciones del Workflow)             │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ (BullMQ Connection)
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                    CAPA DE MENSAJERÍA Y COLAS (REDIS)                       │
+│  - Redis 7 Alpine (Almacenamiento de colas en memoria con persistencia)     │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ (Workers)
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                      CAPA DE PROCESAMIENTO (WORKERS)                        │
+│  - Worker Gmail (Google Workspace OAuth2 - Service Account)                 │
+│  - Worker SECOP II & Worker SIA Observa (Playwright / Chromium Headless)    │
+│  - Worker PDF Validator & Compresor (Ghostscript API)                       │
+│  - Worker Extracción IA (OpenAI Client GPT-4o)                              │
+│  - Worker Generación Certificados (docxtemplater)                           │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                        CAPA DE DATOS (MIGRABLE A ORACLE)                    │
+│  - SQLite (auditoria.db) / Migrable a Servidores de Base de Datos ORACLE   │
+│  - File Storage (Almacenamiento de logs, certificados y evidencias)          │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+
+  <div class="page-break"></div>
+
+  <h2>3. Diagrama de Secuencia del Workflow</h2>
+  <p>
+    El siguiente diagrama ilustra el flujo secuencial de llamadas y la sincronización de estados entre el Agente, los servicios de Google Workspace, SECOP II, SIA Observa y el Supervisor:
+  </p>
+
+  <div class="diagram-box">
+Contratista             Gmail API            Agente SIA            SIA/SECOP          Supervisor
+    │                       │                    │                    │                    │
+    │─── 1. Envía correo ──►│                    │                    │                    │
+    │    solicitud cert.    │                    │                    │                    │
+    │                       │── 2. Sondeo (5m) ─►│                    │                    │
+    │                       │   (Lee correo)     │                    │                    │
+    │                       │                    │── 3. IA extrae JSON ───►│                    │
+    │                       │                    │   (contrato, pago) │                    │
+    │                       │                    │                    │                    │
+    │                       │                    │── 4. Alerta registro en DB ────────────►│
+    │                       │                    │                    │                    │
+    │                       │                    │                    │     5. Clic en     │
+    │                       │                    │                    │◄── "Aprobar" ──────│
+    │                       │                    │                    │    (Control 1)     │
+    │                       │                    │── 6. Clics login y ───►│                    │
+    │                       │                    │   búsqueda de PDFs │                    │
+    │                       │                    │◄─ 7. Descarga 4 PDFs ──│                    │
+    │                       │                    │                    │                    │
+    │                       │                    │── 8. Carga PDFs ──────►│                    │
+    │                       │                    │   en SIA Observa   │                    │
+    │                       │                    │◄─ 9. Retorna Capturas──│                    │
+    │                       │                    │                    │                    │
+    │                       │                    │── 10. Alerta carga en DB ──────────────►│
+    │                       │                    │                    │                    │
+    │                       │                    │                    │     11. Confirma   │
+    │                       │                    │                    │◄── Carga ──────────│
+    │                       │                    │                    │    (Control 2)     │
+    │                       │                    │── 12. Genera DOCX ────►│                    │
+    │                       │                    │   (Llenado plantilla)                   │
+    │                       │                    │                    │     13. Valida y   │
+    │                       │                    │                    │◄── Aprueba Word ───│
+    │                       │                    │                    │    (Control 3)     │
+    │                       │                    │── 14. Envía Word a ───►│                    │
+    │                       │                    │   siadepartamento  │                    │
+    │                       │                    │                    │                    │
+    │                       │◄── 16. Envía PDF ──│                    │                    │
+    │                       │    firmado correo  │                    │                    │
+    │                       │                    │                    │                    │
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>4. Casos de Uso del Agente de Automatización</h2>
+
+  <div class="steps-container">
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-title">CU-01: Recepción e Inicio de Solicitud</span>
+        <span class="step-badge">Híbrido</span>
+      </div>
+      <p style="font-size:9.5pt;margin-bottom:0">
+        El contratista solicita su certificado enviando un correo al buzón <code>sia.educacion@cauca.gov.co</code>. El Agente detecta el correo de forma periódica (sondeo cada 5m), extrae los datos del mensaje mediante IA (confianza mínima de 50%) y crea un registro de la solicitud en la base de datos de auditoría local en estado <code>pendiente_aprobacion</code>. Envía una notificación WebSockets al Dashboard del supervisor. El supervisor valida los datos y aprueba el inicio del trámite.
+      </p>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-title">CU-02: Descarga de SECOP II, Compresión y Carga en SIA Observa</span>
+        <span class="step-badge">Automático</span>
+      </div>
+      <p style="font-size:9.5pt;margin-bottom:0">
+        Una vez aprobada la solicitud, el worker Playwright de SECOP II inicia sesión de forma virtual, busca el contrato y descarga los 4 documentos en formato PDF. El validador comprime mediante Ghostscript aquellos archivos que superen los 4.0 MB. El worker Playwright de SIA Observa inicia sesión, busca el contrato en "Buscar - Contratos", ingresa a "Documentos de Legalidad Anexados", asocia los archivos a la etapa contractual y fase de ejecución, y hace clic en "Insertar anexo", tomando capturas de pantalla de la confirmación como evidencia de auditoría.
+      </p>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-title">CU-03: Generación del Certificado y Envío a Firma</span>
+        <span class="step-badge">Híbrido (Crítico)</span>
+      </div>
+      <p style="font-size:9.5pt;margin-bottom:0">
+        El worker de extracción lee el PDF de contrato descargado, clasifica si es Persona Natural o Jurídica, y extrae los datos requeridos. El worker de certificados genera el archivo Word (.docx) a partir de la plantilla y guarda el registro en el archivo de control en Excel. El supervisor valida el Word generado desde la interfaz. Tras la aprobación final, el bot envía el archivo para firma a <code>siadepartamento@cauca.gov.co</code>. Al retornar el certificado firmado en PDF, el bot lo envía automáticamente al contratista.
+      </p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>5. Cronograma y Plan de Trabajo (6 Semanas)</h2>
+  
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 12%;">Semana</th>
+        <th style="width: 25%;">Hito Principal</th>
+        <th style="width: 43%;">Tareas Clave</th>
+        <th style="width: 20%;">Responsables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Semana 1</strong></td>
+        <td>Infraestructura VM & Docker</td>
+        <td>
+          - Desplegar Servidor Virtual con Ubuntu 22.04 LTS.<br>
+          - Instalar entorno Docker + Compose y volumen persistente.<br>
+          - Configurar firewall institucional (puertos 80, 443).<br>
+          - Validar conectividad de salida hacia SECOP y SIA.
+        </td>
+        <td>Equipo de TI</td>
+      </tr>
+      <tr>
+        <td><strong>Semana 2</strong></td>
+        <td>Google Workspace OAuth2</td>
+        <td>
+          - Crear proyecto en Google Cloud y habilitar Gmail API.<br>
+          - Generar cuenta de servicio y llave privada JSON.<br>
+          - Configurar delegación de dominio para el buzón de la Gobernación.<br>
+          - Validar lecturas y envíos de prueba desde Node.js.
+        </td>
+        <td>Seguridad / Admin Workspace</td>
+      </tr>
+      <tr>
+        <td><strong>Semana 3</strong></td>
+        <td>Automatización Web (Playwright)</td>
+        <td>
+          - Configurar credenciales cifradas de SECOP II y SIA Observa.<br>
+          - Calibrar y ajustar selectores de Playwright de descargas.<br>
+          - Implementar el script de carga automatizada y screenshots.<br>
+          - Instalar y verificar compresión con Ghostscript.
+        </td>
+        <td>Desarrollador Backend</td>
+      </tr>
+      <tr>
+        <td><strong>Semana 4</strong></td>
+        <td>Plantillas DOCX & Excel</td>
+        <td>
+          - Configurar placeholders dinámicos en plantillas Word.<br>
+          - Validar extracción de texto en contratos PDF mediante IA.<br>
+          - Implementar registro transaccional en certificados.xlsx.<br>
+          - Realizar pruebas de rendimiento de los workers.
+        </td>
+        <td>Líder de Negocio / Procesos</td>
+      </tr>
+      <tr>
+        <td><strong>Semana 5</strong></td>
+        <td>Despliegue del Dashboard</td>
+        <td>
+          - Implementar panel web premium con WebSockets y Socket.io.<br>
+          - Integrar autenticación JWT y control de roles.<br>
+          - Configurar proxy inverso Nginx con cifrado SSL/HTTPS.<br>
+          - Validar la visualización del estado de los workers.
+        </td>
+        <td>Desarrollador Fullstack</td>
+      </tr>
+      <tr>
+        <td><strong>Semana 6</strong></td>
+        <td>Pruebas End-to-End & Rollout</td>
+        <td>
+          - Simular 10 trámites reales completos en entorno de pre-producción.<br>
+          - Capacitación y transferencia de conocimiento a supervisores.<br>
+          - Habilitar servicio systemd y pase final a producción.
+        </td>
+        <td>Todo el Equipo</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. Instrucciones para la Integración con Oracle Database</h2>
+  <p>
+    Para integrar el agente a los servidores de base de datos **Oracle** corporativos de la Gobernación del Cauca:
+  </p>
+  <ol>
+    <li>Instalar el driver oficial de Oracle para Node: <code>npm install oracledb</code>.</li>
+    <li>Editar el archivo <code>src/config/database.js</code> para inicializar la conexión con el servidor Oracle utilizando las variables de entorno de su host, puerto, usuario y esquema.</li>
+    <li>Crear el esquema relacional en Oracle importando las tablas adaptadas (con tipos de datos <code>VARCHAR2</code>, <code>NUMBER</code>, <code>TIMESTAMP</code> y restricciones correspondientes).</li>
+  </ol>
+
+</body>
+</html>
