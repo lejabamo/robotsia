@@ -64,17 +64,7 @@ async function cargarDocumentosSIA(codigoContrato, archivos, options = {}) {
 
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
-  if (process.env.SIMULATION_MODE === 'true') {
-    log.info(`[SIMULADOR] Simulando carga en SIA Observa para contrato: ${codigoContrato}`);
-    await esperar(4000); // 4 segundos de delay
-    return {
-      exito: true,
-      documentosCargados: DOCUMENTOS_SIA.length,
-      totalDocumentos: DOCUMENTOS_SIA.length,
-      detalle: { mock: { exito: true } },
-      screenshots: []
-    };
-  }
+
 
   log.info(`Iniciando carga en SIA Observa para contrato: ${codigoContrato}`, { contrato: codigoContrato });
 
@@ -98,27 +88,27 @@ async function cargarDocumentosSIA(codigoContrato, archivos, options = {}) {
     // ============================
     await conReintentos(async () => {
       log.info('Paso 1: Navegando a SIA Observa...');
-      await page.goto(SIA_URL, { waitUntil: 'networkidle' });
+      await page.goto(SIA_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      // Buscar formulario de login
-      // NOTA: Selectores deben ajustarse según la interfaz real de SIA Observa
-      await page.waitForSelector('input[type="text"], input[name="usuario"], #usuario', { timeout: 15000 });
+      // Buscar formulario de login (Selectores comunes SIA)
+      const userInputLocator = await page.waitForSelector('input[type="text"], input[name*="user"], input[name*="User"], #UserName, #usuario', { timeout: 15000 });
+      await userInputLocator.fill(SIA_USER);
 
-      const userInput = await page.$('input[type="text"], input[name="usuario"], #usuario');
-      await userInput.fill(SIA_USER);
-
-      const passInput = await page.$('input[type="password"], input[name="clave"], #clave');
-      await passInput.fill(SIA_PASSWORD);
+      const passInputLocator = await page.$('input[type="password"], input[name*="pass"], input[name*="Pass"], #Password, #clave');
+      if (passInputLocator) await passInputLocator.fill(SIA_PASSWORD);
 
       // Enviar formulario
       const loginBtn = await page.$('button[type="submit"], input[type="submit"], .btn-login, #btnIngresar');
       if (loginBtn) {
-        await loginBtn.click();
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => log.warn("Timeout waiting for nav after login")),
+          loginBtn.click()
+        ]);
       } else {
-        await passInput.press('Enter');
+        await passInputLocator.press('Enter');
       }
 
-      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+      // No esperar waitForNavigation de nuevo acá, ya se esperó en Promise.all o es SPA
       log.info('Login exitoso en SIA Observa');
     }, {
       operacion: 'Login SIA Observa',

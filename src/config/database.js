@@ -148,6 +148,10 @@ function initDatabase() {
     log.info('Usuario admin creado (admin@sia.local / admin123)');
   }
 
+  // Migración: agregar columnas cedula_nit y codigo_proceso si no existen
+  try { db.exec("ALTER TABLE solicitudes ADD COLUMN cedula_nit TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE solicitudes ADD COLUMN codigo_proceso TEXT"); } catch (e) {}
+
   log.info('✅ Base de datos inicializada');
   return db;
 }

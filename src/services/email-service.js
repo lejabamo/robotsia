@@ -17,6 +17,7 @@
  */
 
 const nodemailer = require('nodemailer');
+// googleapis se carga de forma lazy solo en modo producción Gmail
 const path = require('path');
 const fs = require('fs');
 const config = require('../config/env');
@@ -36,10 +37,13 @@ let transporter = null;
 function getTransporter() {
   if (transporter) return transporter;
 
-  const smtpHost = process.env.SMTP_HOST || 'mailpit';
+  let smtpHost = process.env.SMTP_HOST || 'localhost';
+  if (smtpHost === 'mailpit' && !fs.existsSync('/.dockerenv')) {
+    smtpHost = 'localhost';
+  }
   const smtpPort = parseInt(process.env.SMTP_PORT || '1025');
-  const smtpUser = process.env.SMTP_USER || '';
-  const smtpPass = process.env.SMTP_PASS || '';
+  const smtpUser = process.env.SMTP_USER || process.env.IMAP_USER || '';
+  const smtpPass = process.env.SMTP_PASS || process.env.IMAP_PASS || '';
 
   if (smtpHost === 'mailpit' || smtpHost === 'localhost') {
     // Modo de pruebas — sin autenticación, sin TLS
@@ -89,17 +93,24 @@ function getTransporter() {
  * @param {Array}  options.adjuntos - Archivos adjuntos [{nombre, ruta, mimeType}]
  * @returns {Promise<Object>} Resultado del envío
  */
-async function enviarCorreo({ to, subject, body, html = false, adjuntos = [] }) {
+async function enviarCorreo(options = {}) {
+  const to = options.to || options.para;
+  const subject = options.subject || options.asunto;
+  const body = options.body || options.cuerpo || '';
+  const html = options.html || false;
+  const adjuntos = options.adjuntos || options.attachments || [];
+
   log.info(`Enviando correo a ${to}: "${subject}"`);
 
-  // Modo simulador completo (sin red)
-  if (process.env.SIMULATION_MODE === 'true') {
+  // Modo simulador completo (sin red), a menos que estemos usando Mailpit localmente
+  const smtpHost = process.env.SMTP_HOST || 'localhost';
+  if (process.env.SIMULATION_MODE === 'true' && smtpHost !== 'mailpit' && smtpHost !== 'localhost') {
     log.info(`[SIMULADOR] Correo simulado exitosamente a ${to}`);
     return { exito: true, messageId: `sim-${Date.now()}`, to, subject };
   }
 
   const mail = getTransporter();
-  const from = process.env.SMTP_USER || process.env.GMAIL_USER || 'robotsia@cauca.gov.co';
+  const from = process.env.SMTP_USER || process.env.GMAIL_USER || 'sia.educacion@cauca.gov.co';
 
   try {
     const mailOptions = {
@@ -108,12 +119,18 @@ async function enviarCorreo({ to, subject, body, html = false, adjuntos = [] }) 
       subject,
       [html ? 'html' : 'text']: body,
       attachments: adjuntos
-        .filter(adj => fs.existsSync(adj.ruta))
-        .map(adj => ({
-          filename: adj.nombre || path.basename(adj.ruta),
-          path: adj.ruta,
-          contentType: adj.mimeType || 'application/octet-stream',
-        })),
+        .map(adj => {
+          let rutaFisica = adj.ruta;
+          if (rutaFisica.startsWith('/storage') || rutaFisica.startsWith('\\storage')) {
+            rutaFisica = path.join(process.cwd(), rutaFisica);
+          }
+          return {
+            filename: adj.nombre || path.basename(rutaFisica),
+            path: rutaFisica,
+            contentType: adj.mimeType || 'application/octet-stream',
+          };
+        })
+        .filter(adj => fs.existsSync(adj.path)),
     };
 
     const info = await mail.sendMail(mailOptions);
@@ -197,61 +214,65 @@ async function leerCorreosMailpit(maxResults = 10) {
  * Lectura de correos via Gmail API (producción).
  * Requiere GOOGLE_SERVICE_ACCOUNT_KEY o credenciales OAuth2 en .env
  */
-async function leerCorreosGmail({ query = 'is:unread', maxResults = 10 }) {
-  const { google } = require('googleapis');
-  const keyPath = path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || './credentials/service-account.json');
+async function leerCorreosGmail({ query = 'UNSEEN', maxResults = 10 }) {
+  const imap = require('imap-simple');
+  const simpleParser = require('mailparser').simpleParser;
 
-  if (!fs.existsSync(keyPath) || fs.readFileSync(keyPath, 'utf-8') === '{}') {
-    log.warn('Service Account no configurada. Omitiendo lectura de Gmail.');
+  const config = {
+    imap: {
+      user: process.env.IMAP_USER,
+      password: process.env.IMAP_PASS,
+      host: 'imap.gmail.com',
+      port: 993,
+      tls: true,
+      authTimeout: 3000
+    }
+  };
+
+  if (!config.imap.user || !config.imap.password) {
+    log.warn('Credenciales IMAP no configuradas en .env. Omitiendo lectura.');
     return [];
   }
 
-  const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
-  const auth = new google.auth.JWT({
-    email: keyFile.client_email,
-    key: keyFile.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.modify',
-    ],
-    subject: process.env.GMAIL_USER,
-  });
+  try {
+    const connection = await imap.connect(config);
+    await connection.openBox('INBOX');
 
-  await auth.authorize();
-  const gmail = google.gmail({ version: 'v1', auth });
+    // Usamos el 'query' como un criterio de búsqueda de IMAP, por defecto UNSEEN
+    const searchCriteria = [query, ['FROM', 'leonardo.bastidas@cauca.gov.co']];
+    const fetchOptions = {
+      bodies: [''], // Fetch the entire email
+      markSeen: false, // No marcamos como leído hasta que se procese con éxito
+      struct: true
+    };
 
-  const listResult = await gmail.users.messages.list({
-    userId: 'me',
-    q: query,
-    maxResults,
-  });
+    const messages = await connection.search(searchCriteria, fetchOptions);
+    log.info(`${messages.length} correo(s) encontrados en Gmail (IMAP)`);
 
-  const mensajes = listResult.data.messages || [];
-  log.info(`${mensajes.length} correo(s) encontrados en Gmail`);
+    const correos = [];
+    let limit = Math.min(messages.length, maxResults);
+    
+    for (let i = 0; i < limit; i++) {
+      const msg = messages[i];
+      const all = msg.parts.find(part => part.which === '');
+      const parsed = await simpleParser(all.body);
 
-  const correos = [];
-  for (const msg of mensajes) {
-    const detalle = await gmail.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
-    const headers = detalle.data.payload.headers;
-    const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
-    const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
-    const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
-
-    let bodyText = '';
-    const payload = detalle.data.payload;
-    if (payload.body?.data) {
-      bodyText = Buffer.from(payload.body.data, 'base64').toString('utf-8');
-    } else if (payload.parts) {
-      const textPart = payload.parts.find(p => p.mimeType === 'text/plain');
-      if (textPart?.body?.data) {
-        bodyText = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
-      }
+      correos.push({
+        id: msg.attributes.uid, // Usamos UID como identificador para marcarlo luego
+        subject: parsed.subject || '',
+        from: parsed.from?.value[0]?.address || '',
+        date: parsed.date || new Date(),
+        body: parsed.text || '', // Texto plano
+        adjuntos: []
+      });
     }
 
-    correos.push({ id: msg.id, subject, from, date, body: bodyText, adjuntos: [] });
+    connection.end();
+    return correos;
+  } catch (error) {
+    log.error(`Error leyendo correos IMAP: ${error.message}`);
+    return [];
   }
-
-  return correos;
 }
 
 /**
@@ -261,25 +282,29 @@ async function marcarComoLeido(messageId) {
   const smtpHost = process.env.SMTP_HOST || 'mailpit';
   if (smtpHost === 'mailpit') return; // Mailpit no requiere marcar
 
-  // Gmail API
-  const { google } = require('googleapis');
-  const keyPath = path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || './credentials/service-account.json');
-  if (!fs.existsSync(keyPath)) return;
+  const imap = require('imap-simple');
+  const config = {
+    imap: {
+      user: process.env.IMAP_USER,
+      password: process.env.IMAP_PASS,
+      host: 'imap.gmail.com',
+      port: 993,
+      tls: true,
+      authTimeout: 3000
+    }
+  };
 
-  const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
-  const auth = new google.auth.JWT({
-    email: keyFile.client_email,
-    key: keyFile.private_key,
-    scopes: ['https://www.googleapis.com/auth/gmail.modify'],
-    subject: process.env.GMAIL_USER,
-  });
-  await auth.authorize();
-  const gmail = google.gmail({ version: 'v1', auth });
-  await gmail.users.messages.modify({
-    userId: 'me',
-    id: messageId,
-    requestBody: { removeLabelIds: ['UNREAD'] },
-  });
+  if (!config.imap.user || !config.imap.password) return;
+
+  try {
+    const connection = await imap.connect(config);
+    await connection.openBox('INBOX');
+    await connection.addFlags(messageId, '\\Seen');
+    log.info(`Correo UID ${messageId} marcado como leído`);
+    connection.end();
+  } catch (error) {
+    log.error(`Error al marcar como leído (IMAP): ${error.message}`);
+  }
 }
 
 module.exports = {

@@ -15,8 +15,8 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 
-# Instalar Playwright Chromium
-RUN npx playwright install chromium
+# Instalar Playwright Chromium y sus dependencias (libXfixes, etc)
+RUN npx playwright install --with-deps chromium
 
 COPY src/ ./src/
 COPY templates/ ./templates/

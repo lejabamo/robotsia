@@ -9,7 +9,7 @@
 const { Worker } = require('bullmq');
 const { getRedisConnection } = require('../config/redis');
 const { initDatabase, solicitudes, auditoria } = require('../config/database');
-const { transicionar, emitirEvento } = require('../queues/queue-manager');
+const { transicionar, emitirEvento, initQueues } = require('../queues/queue-manager');
 const { workflowLogger } = require('../utils/logger');
 
 const log = workflowLogger('WORKERS');
@@ -93,6 +93,7 @@ async function startAllWorkers() {
   log.info('=== Iniciando Workers SIA Observa ===');
 
   initDatabase();
+  initQueues(null); // Inicializar colas en el proceso worker
 
   // Registrar todos los workers
   crearWorker('email-check',            procesarRevisionCorreo,    1);

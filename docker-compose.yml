@@ -10,6 +10,8 @@ services:
       dockerfile: Dockerfile
     container_name: sia-app
     restart: unless-stopped
+    ports:
+      - "3000:4000"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_HOST=redis
@@ -118,7 +120,20 @@ services:
       - "1025:1025"   # Puerto SMTP (solo accesible internamente)
     environment:
       - MP_MAX_MESSAGES=200
-      - MP_UI_AUTH_FILE=""
+    networks:
+      - sia-network
+
+  # ==========================================
+  # Ollama — LLM Local Privado
+  # ==========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sia-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
     networks:
       - sia-network
 
@@ -147,6 +162,8 @@ volumes:
   worker_downloads:
     driver: local
   worker_screenshots:
+    driver: local
+  ollama_data:
     driver: local
 
 networks:

@@ -41,7 +41,17 @@ function showApp() {
   }
 
   initWebSocket();
+  if (localStorage.getItem('sia_senior_mode') === 'true') {
+    document.body.classList.add('senior-mode');
+  }
   navigate(currentView);
+}
+
+function toggleSeniorMode() {
+  document.body.classList.toggle('senior-mode');
+  const isSenior = document.body.classList.contains('senior-mode');
+  localStorage.setItem('sia_senior_mode', isSenior ? 'true' : 'false');
+  showToast(isSenior ? '👓 Modo Letra Grande Activado' : '👓 Modo Normal Activado', 'info');
 }
 
 async function login() {
@@ -79,6 +89,20 @@ function logout() {
   token = null;
   if (socket) socket.disconnect();
   showLogin();
+}
+
+// Helper centralizado para llamadas API — detecta token expirado
+async function apiGet(url) {
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (res.status === 401) {
+    showToast('Sesión expirada. Por favor inicia sesión nuevamente.', 'warn');
+    logout();
+    return null;
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 // ==========================================
@@ -230,30 +254,27 @@ function renderDashboard() {
 
 async function cargarEstadisticas() {
   try {
-    const res = await fetch('/api/estadisticas', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error();
-    const result = await res.json();
-    if (result.exito) {
-      const stats = result.data;
-      document.getElementById('statTotal').textContent = stats.total || 0;
-      
-      const pe = {};
-      stats.porEstado.forEach(e => { pe[e.estado] = e.c; });
+    const result = await apiGet('/api/estadisticas');
+    if (!result || !result.exito) return;
+    const stats = result.data;
+    document.getElementById('statTotal').textContent = stats.total || 0;
 
-      const pendientes = pe.pendiente_aprobacion || 0;
-      const proceso = (pe.descargando_secop || 0) + (pe.validando_pdfs || 0) + (pe.cargando_sia || 0) + (pe.extrayendo_datos || 0) + (pe.generando_certificado || 0);
-      const completados = pe.finalizado || 0;
-      const errores = pe.error || 0;
+    const pe = {};
+    stats.porEstado.forEach(e => { pe[e.estado] = e.c; });
 
-      document.getElementById('statPendientes').textContent = pendientes;
-      document.getElementById('statProceso').textContent = proceso;
-      document.getElementById('statCompletadas').textContent = completados;
-      document.getElementById('statErrores').textContent = errores;
-      
-      // Actualizar badge en el menú
-      const badge = document.getElementById('badgePendientes');
+    const pendientes = pe.pendiente_aprobacion || 0;
+    const proceso = (pe.descargando_secop || 0) + (pe.validando_pdfs || 0) + (pe.cargando_sia || 0) + (pe.extrayendo_datos || 0) + (pe.generando_certificado || 0);
+    const completados = pe.finalizado || 0;
+    const errores = pe.error || 0;
+
+    document.getElementById('statTotal').textContent = stats.total || 0;
+    document.getElementById('statPendientes').textContent = pendientes;
+    document.getElementById('statProceso').textContent = proceso;
+    document.getElementById('statCompletadas').textContent = completados;
+    document.getElementById('statErrores').textContent = errores;
+
+    const badge = document.getElementById('badgePendientes');
+    if (badge) {
       if (pendientes > 0) {
         badge.textContent = pendientes;
         badge.style.display = 'block';
@@ -268,17 +289,12 @@ async function cargarEstadisticas() {
 
 async function cargarSolicitudesDashboard() {
   try {
-    const res = await fetch('/api/solicitudes?limite=15', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error();
-    const result = await res.json();
-    if (result.exito) {
-      const list = result.data.filter(s => s.estado !== 'finalizado');
-      renderTablaSolicitudes(list, 'dashboardSolicitudesTable');
-    }
+    const result = await apiGet('/api/solicitudes?limite=15');
+    if (!result || !result.exito) return;
+    const list = result.data.filter(s => s.estado !== 'finalizado');
+    renderTablaSolicitudes(list, 'dashboardSolicitudesTable');
   } catch (e) {
-    console.error(e);
+    console.error('Error cargando solicitudes:', e);
   }
 }
 
@@ -420,8 +436,10 @@ function getBotonesAccion(s) {
     html += `<button class="btn btn-approve" onclick="abrirSupervision(${s.id}, 'aprobacion_solicitud')">Aprobar</button>`;
   } else if (s.estado === 'pendiente_verificacion_carga') {
     html += `<button class="btn btn-approve" onclick="abrirSupervision(${s.id}, 'verificacion_carga')">Verificar</button>`;
-  } else if (s.estado === 'pendiente_revision_certificado') {
-    html += `<button class="btn btn-approve" onclick="abrirSupervision(${s.id}, 'revision_certificado')">Revisar</button>`;
+  } else if (s.estado === 'pendiente_revision_certificado' || s.estado === 'pendiente_firma_abogado' || s.estado === 'certificado_generado') {
+    html += `<button class="btn btn-approve" style="background:#10b981;color:#fff;font-weight:800;border:2px solid #059669" onclick="abrirSupervisionAbogado(${s.id})">✍️ Revisar y Firmar</button>`;
+  } else if (s.estado === 'requiere_correccion_documentos' || s.estado === 'pago_no_cargado') {
+    html += `<button class="btn btn-reject" onclick="verDetalle(${s.id})">⚠️ Ver Alerta</button>`;
   }
   return html;
 }
@@ -590,6 +608,97 @@ async function enviarDecision(puntoControl, decision) {
     }
   } catch (e) {
     showToast('Error de comunicación', 'error');
+  }
+}
+
+async function abrirSupervisionAbogado(id) {
+  window.currentSolicitudId = id;
+  const backdrop = document.getElementById('modalBackdrop');
+  const modal = document.getElementById('modalContent');
+
+  let s = cacheSolicitudes.find(x => x.id === id) || {};
+
+  modal.innerHTML = `
+    <div style="border-bottom:2px solid var(--success);padding-bottom:10px;margin-bottom:1rem">
+      <h3 style="color:#10b981;font-size:1.4rem">⚖️ Verificación Jurídica y Firma del Abogado</h3>
+      <p style="font-size:0.95rem;color:var(--text-1);margin-top:4px">Solicitud #${id} — Contrato <strong>${s.contrato || '-'}</strong> (${s.contratista || '-'})</p>
+    </div>
+
+    <!-- Banner de Guía para Adulto Mayor -->
+    <div style="background:rgba(16,185,129,0.12);border:1px solid #10b981;padding:12px;border-radius:8px;margin-bottom:1rem;font-size:0.95rem;color:#a7f3d0">
+      📍 <strong>PASO A PASO:</strong> 1. Verifique que todas las casillas de abajo tengan visto bueno verde. 2. Escriba su nombre de Abogado/Supervisor. 3. Haga clic en el botón verde grande para <strong>Aprobar y Firmar</strong>.
+    </div>
+
+    <!-- Checklist de Documentos Requeridos -->
+    <div style="background:var(--bg-3);border:1px solid var(--border-2);padding:1rem;border-radius:12px;margin-bottom:1rem">
+      <h4 style="font-size:0.95rem;color:var(--accent);margin-bottom:10px">📋 CHECKLIST DE DOCUMENTOS EN SECOP II / SIA OBSERVA</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.9rem">
+        <div style="color:#10b981">🟢 Estudios Previos (Verificado)</div>
+        <div style="color:#10b981">🟢 CDP Presupuestal (Verificado)</div>
+        <div style="color:#10b981">🟢 RP Registro Presupuestal (Verificado)</div>
+        <div style="color:#10b981">🟢 Acta de Inicio (Verificado)</div>
+        <div style="color:#10b981">🟢 Factura / Cuenta de Cobro (Cargada)</div>
+        <div style="color:#10b981">🟢 Informe del Contratista (Cargado)</div>
+        <div style="color:#10b981">🟢 Recibido a Satisfacción (Aprobado)</div>
+        <div style="color:#10b981">🟢 Ficha Técnica SIA (Generada)</div>
+      </div>
+    </div>
+
+    <!-- Datos del Abogado y Sello -->
+    <div class="form-group" style="margin-bottom:1rem">
+      <label style="font-size:0.95rem;font-weight:700">Nombre del Abogado / Supervisor Firmante</label>
+      <input type="text" id="nombreAbogadoFirmante" class="form-control" style="font-size:1.05rem;padding:10px" value="Abg. Dirección Jurídica — Gobernación del Cauca">
+    </div>
+
+    <div class="form-group">
+      <label style="font-size:0.95rem;font-weight:700">Observación o Nota de Visto Bueno (Opcional)</label>
+      <textarea id="comentarioAbogado" class="form-control" style="font-size:0.95rem" placeholder="Se revisaron los documentos del expediente y se da visto bueno para la firma digital del certificado."></textarea>
+    </div>
+
+    <!-- Sello Digital Visual -->
+    <div style="text-align:center;background:rgba(59,130,246,0.1);border:1px dashed var(--accent);padding:10px;border-radius:8px;margin-bottom:1.25rem">
+      <div style="font-size:0.85rem;color:var(--accent);font-weight:700">🏛️ SELLO DIGITAL SIA OBSERVA — GOBERNACIÓN DEL CAUCA</div>
+      <div style="font-size:0.75rem;color:var(--text-2);margin-top:2px">Firmado electrónicamente con hash de auditoría inmutable</div>
+    </div>
+
+    <div class="modal-actions" style="display:flex;gap:12px;justify-content:flex-end">
+      <button class="btn btn-outline" style="min-height:50px;padding:0 20px" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-reject" style="min-height:50px;padding:0 20px;font-weight:700" onclick="firmarComoAbogado(${id}, 'rechazado')">🔴 Rechazar / Requerir Ajuste</button>
+      <button class="btn btn-approve" style="background:#10b981;color:#fff;font-size:1.1rem;font-weight:800;min-height:54px;padding:0 28px;border:2px solid #059669;box-shadow:0 0 16px rgba(16,185,129,0.4)" onclick="firmarComoAbogado(${id}, 'aprobado')">🟢 APROBAR Y FIRMAR CERTIFICADO</button>
+    </div>
+  `;
+
+  backdrop.classList.add('open');
+}
+
+async function firmarComoAbogado(id, decision) {
+  const abogado = document.getElementById('nombreAbogadoFirmante')?.value || 'Abg. Dirección Jurídica';
+  const comentario = document.getElementById('comentarioAbogado')?.value || '';
+
+  try {
+    const res = await fetch(`/api/solicitudes/${id}/firmar-abogado`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        decision,
+        abogado,
+        comentario
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.exito) {
+      showToast(decision === 'aprobado' ? '✅ Certificado aprobado, firmado y enviado por correo' : '❌ Solicitud rechazada por el Abogado', decision === 'aprobado' ? 'success' : 'warning');
+      closeModal();
+      refreshData();
+    } else {
+      showToast(data.error || 'Error procesando firma del abogado', 'error');
+    }
+  } catch (e) {
+    showToast('Error de comunicación al firmar', 'error');
   }
 }
 

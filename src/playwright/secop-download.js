@@ -43,27 +43,6 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
   fs.mkdirSync(outputDir, { recursive: true });
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
-  if (process.env.SIMULATION_MODE === 'true') {
-    log.info(`[SIMULADOR] Simulando descarga desde SECOP II para contrato: ${codigoContrato}`);
-    await esperar(3000); // 3 segundos de delay simulado
-    
-    const documentosRequeridos = [
-      { nombre: 'informe_supervisor', archivo: 'Supervisor.pdf' },
-      { nombre: 'informe_contratista', archivo: 'Contratista.pdf' },
-      { nombre: 'comprobante_egreso', archivo: 'Pago.pdf' },
-      { nombre: 'contrato', archivo: 'Contrato.pdf' }
-    ];
-    
-    const archivosDescargados = {};
-    for (const doc of documentosRequeridos) {
-      const rutaDestino = path.join(outputDir, `${codigoContrato}_${doc.archivo}`);
-      fs.writeFileSync(rutaDestino, `Este es un PDF de prueba generado por el simulador para el documento: ${doc.nombre}.`);
-      archivosDescargados[doc.nombre] = { ruta: rutaDestino, tamano: 1024, nombre: `${codigoContrato}_${doc.archivo}` };
-    }
-    
-    return { exito: true, archivos: archivosDescargados, descargasExitosas: 4, totalRequeridas: 4 };
-  }
-
   log.info(`Iniciando descarga para contrato: ${codigoContrato}`, { contrato: codigoContrato });
 
   const browser = await chromium.launch({
@@ -83,33 +62,65 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
 
   try {
     // ============================
+    // Paso 0: Verificar caché local
+    // ============================
+    // outputDir ya viene por parámetro (ej. /app/downloads/1311-2026)
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+
+    const documentosRequeridos = [
+      { nombre: 'informe_supervisor', etiqueta: 'Informe del Supervisor', archivo: 'Supervisor.pdf' },
+      { nombre: 'informe_contratista', etiqueta: 'Informe del Contratista', archivo: 'Contratista.pdf' },
+      { nombre: 'comprobante_egreso', etiqueta: 'Comprobante de Egreso', archivo: 'Pago.pdf' },
+      { nombre: 'contrato', etiqueta: 'Contrato', archivo: 'Contrato.pdf' }
+    ];
+
+    const archivosFaltantes = documentosRequeridos.filter(doc => {
+      return !fs.existsSync(path.join(outputDir, `${codigoContrato}_${doc.archivo}`));
+    });
+
+    if (archivosFaltantes.length === 0) {
+      log.info(`Todos los documentos para el contrato ${codigoContrato} ya están descargados. Saltando navegación SECOP.`);
+      return {
+        exito: true,
+        documentosDescargados: documentosRequeridos.length,
+        totalDocumentos: documentosRequeridos.length,
+        rutaBase: outputDir,
+        screenshots: []
+      };
+    }
+
+    // ============================
     // Paso 1: Login en SECOP II
     // ============================
     await conReintentos(async () => {
-      log.info('Paso 1: Navegando a SECOP II...');
-      await page.goto(SECOP_URL, { waitUntil: 'networkidle' });
+      log.info('Paso 1: Navegando a Login SECOP II...');
+      const loginUrl = SECOP_URL.includes('Login/Index') ? SECOP_URL : 'https://community.secop.gov.co/STS/Users/Login/Index';
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      // Buscar e interactuar con el formulario de login
-      // NOTA: Los selectores deben ajustarse según la interfaz real de SECOP II
-      await page.waitForSelector('input[type="text"], input[name="username"], #username', { timeout: 15000 });
+      // Buscar e interactuar con el formulario de login (Selectores oficiales SECOP II)
+      await page.waitForSelector('#txtUserName', { state: 'attached', timeout: 15000 });
 
-      // Ingresar credenciales
-      const userInput = await page.$('input[type="text"], input[name="username"], #username');
-      await userInput.fill(SECOP_USER);
+      // Ingresar credenciales forzando la interacción porque Vortal oculta el input original
+      const userInput = await page.$('#txtUserName');
+      await userInput.fill(SECOP_USER, { force: true });
 
-      const passInput = await page.$('input[type="password"], input[name="password"], #password');
-      await passInput.fill(SECOP_PASSWORD);
+      const passInput = await page.$('#txtPassword');
+      await passInput.fill(SECOP_PASSWORD, { force: true });
 
       // Enviar formulario
-      const loginBtn = await page.$('button[type="submit"], input[type="submit"], .login-button');
+      const loginBtn = await page.$('#btnIngresar');
       if (loginBtn) {
-        await loginBtn.click();
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => log.warn("Timeout waiting for nav after login (might be SPA)")),
+          loginBtn.click()
+        ]);
       } else {
         await passInput.press('Enter');
       }
 
-      // Esperar a que cargue el dashboard
-      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+      // Esperar a que cargue el dashboard (ej. la barra de búsqueda global)
+      await page.waitForSelector('#quickSearchGlobal, .home-dashboard, #UserNameSpan', { state: 'attached', timeout: 30000 });
       log.info('Login exitoso en SECOP II');
     }, {
       operacion: 'Login SECOP II',
@@ -128,24 +139,23 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
     await conReintentos(async () => {
       log.info(`Paso 2: Buscando contrato ${codigoContrato}...`);
 
-      // Navegar a la sección de búsqueda de contratos
-      // NOTA: Ajustar selectores según la interfaz real
-      const searchInput = await page.waitForSelector(
-        'input[placeholder*="buscar"], input[name="search"], .search-input',
-        { timeout: 15000 }
-      );
-      await searchInput.fill(codigoContrato);
-      await searchInput.press('Enter');
+      // Usar la barra de búsqueda global del header
+      const searchInput = await page.waitForSelector('#quickSearchGlobal', { state: 'attached', timeout: 15000 });
+      await searchInput.fill(codigoContrato, { force: true });
+      await searchInput.press('Enter', { force: true });
 
-      // Esperar resultados
+      // Esperar la lista de resultados
       await page.waitForTimeout(3000);
 
-      // Hacer clic en el resultado del contrato
+      // Hacer clic en el resultado del contrato (a href con el código)
       const resultado = await page.waitForSelector(
-        `text=${codigoContrato}, .contract-result, .search-result`,
+        `a:has-text("${codigoContrato}")`,
         { timeout: 15000 }
       );
-      await resultado.click();
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => log.warn("Timeout waiting for contract page")),
+        resultado.click()
+      ]);
       await page.waitForTimeout(2000);
 
       log.info(`Contrato ${codigoContrato} encontrado`);
@@ -163,13 +173,6 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
     // ============================
     // Paso 3: Descargar documentos
     // ============================
-    const documentosRequeridos = [
-      { nombre: 'informe_supervisor', etiqueta: 'Informe del Supervisor', archivo: 'Supervisor.pdf' },
-      { nombre: 'informe_contratista', etiqueta: 'Informe del Contratista', archivo: 'Contratista.pdf' },
-      { nombre: 'comprobante_egreso', etiqueta: 'Comprobante de Egreso', archivo: 'Pago.pdf' },
-      { nombre: 'contrato', etiqueta: 'Contrato', archivo: 'Contrato.pdf' }
-    ];
-
     for (const doc of documentosRequeridos) {
       log.info(`Paso 3: Descargando ${doc.etiqueta}...`);
 

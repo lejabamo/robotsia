@@ -145,12 +145,24 @@ const ESTADOS = {
     fase: 'error',
     progreso: -1,
     descripcion: 'Error en el proceso',
-    transiciones: ['pendiente_aprobacion'] // Permite reiniciar
+    transiciones: ['pendiente_aprobacion', 'aprobado', 'descargando_secop'] // Permite reiniciar desde cualquier punto
   },
   rechazado: {
     fase: 'rechazado',
     progreso: 0,
     descripcion: 'Solicitud rechazada'
+  },
+  requiere_correccion_documentos: {
+    fase: 'rechazado',
+    progreso: 0,
+    descripcion: 'Documentos faltantes o incompletos en SECOP II / SIA',
+    transiciones: ['pendiente_aprobacion', 'aprobado', 'rechazado']
+  },
+  pago_no_cargado: {
+    fase: 'rechazado',
+    progreso: 0,
+    descripcion: 'El pago solicitado no tiene soportes cargados en SIA Observa',
+    transiciones: ['pendiente_aprobacion', 'aprobado', 'rechazado']
   }
 };
 

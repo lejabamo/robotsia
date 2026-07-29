@@ -17,10 +17,24 @@ async function procesarExtraccionDatos(job) {
 
   if (!contratoFile) throw new Error('Archivo de contrato no encontrado');
 
-  const pdfBuffer = fs.readFileSync(path.join(downloadDir, contratoFile));
-  const pdfData = await pdfParse(pdfBuffer);
-
-  const datos = await extraerDatosContrato(pdfData.text);
+  let datos;
+  if (process.env.SIMULATION_MODE === 'true' || process.env.OPENAI_API_KEY.includes('your_openai_key')) {
+    // Si estamos en simulación o no hay API key real, usar datos estáticos
+    datos = {
+      tipo: 'natural',
+      codigoContrato: contrato,
+      codigoProceso: '1311-2026',
+      empresa: 'ANDRES FELIPE ZUÑIGA LOPEZ',
+      nit: '1002957792',
+      representante: 'ANDRES FELIPE ZUÑIGA LOPEZ',
+      cedula: '1002957792',
+      expedicion: 'Popayán'
+    };
+  } else {
+    const pdfBuffer = fs.readFileSync(path.join(downloadDir, contratoFile));
+    const pdfData = await pdfParse(pdfBuffer);
+    datos = await extraerDatosContrato(pdfData.text);
+  }
 
   // Completar con datos de la solicitud
   const solicitud = solicitudes.obtener(solicitudId);

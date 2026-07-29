@@ -49,8 +49,8 @@ const config = {
   },
 
   openai: {
-    apiKey: process.env.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || 'gpt-4o'
+    apiKey: process.env.OPENAI_API_KEY || 'ollama',
+    model: process.env.OPENAI_MODEL || 'llama3.1'
   },
 
   funcionario: process.env.FUNCIONARIO_NOMBRE || '',

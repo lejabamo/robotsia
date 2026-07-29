@@ -551,6 +551,74 @@
       .table-wrap { overflow-x: auto; }
       table { min-width: 700px; }
     }
+
+    /* ====== MODO ACCESIBLE / ADULTO MAYOR (62+) ====== */
+    body.senior-mode {
+      font-size: 1.15rem !important;
+      line-height: 1.6 !important;
+      background: #04060a !important;
+    }
+    body.senior-mode .topbar h2 {
+      font-size: 1.6rem !important;
+      font-weight: 800 !important;
+    }
+    body.senior-mode table th, body.senior-mode table td {
+      font-size: 1.1rem !important;
+      padding: 16px 20px !important;
+    }
+    body.senior-mode .btn {
+      font-size: 1.15rem !important;
+      padding: 14px 24px !important;
+      min-height: 52px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.5px !important;
+      border-width: 2px !important;
+    }
+    body.senior-mode .stat-value {
+      font-size: 2.8rem !important;
+      font-weight: 800 !important;
+    }
+    body.senior-mode .stat-label {
+      font-size: 0.95rem !important;
+      color: #cbd5e1 !important;
+      font-weight: 700 !important;
+    }
+    body.senior-mode .senior-banner {
+      display: flex !important;
+    }
+    .btn-senior-toggle {
+      background: #f59e0b;
+      color: #000;
+      font-weight: 800;
+      font-size: 0.85rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 2px solid #fbbf24;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: var(--transition);
+      box-shadow: 0 0 12px rgba(245,158,11,0.3);
+    }
+    .btn-senior-toggle:hover {
+      background: #d97706;
+      color: #fff;
+      transform: scale(1.04);
+    }
+    .senior-banner {
+      display: none;
+      background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(59,130,246,0.18));
+      border: 2px solid #f59e0b;
+      border-radius: var(--radius);
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+      gap: 1rem;
+      color: #fef08a;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -612,9 +680,21 @@
     <main class="main">
       <div class="topbar">
         <h2 id="pageTitle">Dashboard</h2>
-        <div class="live-indicator"><div class="live-dot"></div> Tiempo Real</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-senior-toggle" onclick="toggleSeniorMode()" title="Aumentar tamaño de letra y contraste para fácil lectura">
+            <span>👓 Modo Letra Grande</span>
+          </button>
+          <div class="live-indicator"><div class="live-dot"></div> Tiempo Real</div>
+        </div>
       </div>
       <div class="content" id="contentArea">
+        <div class="senior-banner" id="seniorBanner">
+          <span style="font-size:1.8rem">💡</span>
+          <div>
+            <div><strong>MODO FÁCIL ACTIVADO (SUPERVISORES)</strong></div>
+            <div style="font-weight:400;font-size:0.95rem;color:#fef3c7;margin-top:2px">Instrucciones: Revise las solicitudes en pantalla y presione los botones verdes para aprobar o verificar requisitos.</div>
+          </div>
+        </div>
         <!-- Content loaded dynamically -->
       </div>
     </main>

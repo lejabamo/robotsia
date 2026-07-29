@@ -1,0 +1,218 @@
+LA DIRECCIÓN JURÍDICA - GRUPO SIA OBSERVA - DEL DEPARTAMENTO DEL CAUCA
+
+CERTIFICA
+
+
+
+DOCUMENTOS PRE-CONTRACTUALES
+
+DOCUMENTOS CONTRACTUALES
+
+ESTUDIOS PREVIOS
+
+X
+
+CONTRATO
+
+X
+
+CDP
+
+X
+
+RP
+
+X
+
+ANÁLISIS DEL SECTOR
+
+X
+
+ACTA DE INICIO
+
+X
+
+CONSTANCIA DE IDONEIDAD
+
+X
+
+DESIGNACIÓN DE SUPERVISOR
+
+X
+
+CERTIFICADO DE INEXISTENCIA
+
+X
+
+
+
+
+
+DOCUMENTOS QUE ACREDITEN LA EXPERIENCIA
+
+Y REQUISITOS DE CONTRATACIÓN 
+
+X
+
+
+
+
+
+INFORMACIÓN DE PAGOS
+
+SOPORTE DE ACTAS
+
+NÚMERO DE ACTAS Y/O ANTICIPOS 
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10
+
+11
+
+12
+
+FACTURA O CUENTA DE COBRO
+
+{{F1}}
+
+{{F2}}
+
+{{F3}}
+
+{{F4}}
+
+{{F5}}
+
+{{F6}}
+
+{{F7}}
+
+{{F8}}
+
+{{F9}}
+
+{{F10}}
+
+{{F11}}
+
+{{F12}}
+
+RECIBIDO A SATISFACCIÓN
+
+{{R1}}
+
+{{R2}}
+
+{{R3}}
+
+{{R4}}
+
+{{R5}}
+
+{{R6}}
+
+{{R7}}
+
+{{R8}}
+
+{{R9}}
+
+{{R10}}
+
+{{R11}}
+
+{{R12}}
+
+INFORME CONTRATISTA
+
+{{I1}}
+
+{{I2}}
+
+{{I3}}
+
+{{I4}}
+
+{{I5}}
+
+{{I6}}
+
+{{I7}}
+
+{{I8}}
+
+{{I9}}
+
+{{I10}}
+
+{{I11}}
+
+{{I12}}
+
+PAGOS REALIZADOS 
+
+{{P1}}
+
+{{P2}}
+
+{{P3}}
+
+{{P4}}
+
+{{P5}}
+
+{{P6}}
+
+{{P7}}
+
+{{P8}}
+
+{{P9}}
+
+{{P10}}
+
+{{P11}}
+
+{{P12}}
+
+
+
+Que, una vez revisado en El Sistema Electrónico para la Contratación Pública SECOP y El Sistema Integral de Auditorías - SIA OBSERVA - a la fecha, los citados documentos correspondientes al contrato No. {{NUM_CONTRATO}}, con número de proceso {{NUM_PROCESO}}. suscrito con el señor (a) {{CONTRATISTA}}, identificado (a) con la cédula de ciudadanía No. {{CEDULA}} Expedida en {{LUGAR_EXP}}, cuyo objeto es: “{{OBJETO}}” se encuentran debidamente cargados, lo que se puede evidenciar en la vista pública de los mismos. 
+
+Con base en lo anterior, el supervisor (a) considera procedente tramitar el pago correspondiente a la cuenta de honorarios {{NUM_PAGO}}, se anexa ficha técnica del reporte del SIA OBSERVA.
+
+Expedido en Popayán, a los {{DIA_LETRAS}} ({{DIA_NUM}}) días del mes de {{MES}} de {{ANIO}}.
+
+
+
+
+
+DAVID FERNANDO MOLINA
+
+TÉCNICO ADMINISTRATIVO
+
+DIRECCIÓN JURÍDICA
+
+
+
+Proyectó: {{PROYECTO}}
+
+Revisó: {{REVISO}}
+

@@ -67,7 +67,7 @@ function esperar(ms) {
  * Sanitiza una cadena para uso seguro en nombres de archivo.
  */
 function sanitizarNombreArchivo(nombre) {
-  return nombre
+  return String(nombre || '')
     .replace(/[<>:"/\\|?*]/g, '')
     .replace(/\s+/g, '_')
     .trim()

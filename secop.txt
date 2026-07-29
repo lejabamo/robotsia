@@ -1,0 +1,6 @@
+https://community.secop.gov.co/STS/Users/Login/Index?SkinName=CCE&ReturnUrl=%2fSTS%2fusers%2fissue.aspx%3fwa%3dwsignin1.0%26wtrealm%3dhttps%253a%252f%252fwww.secop.gov.co%252fCO1ContractsManagement%26wctx%3drm%253d0%2526id%253dpassive%2526ru%253d%25252fCO1ContractsManagement%25252fTendering%25252fProcurementContractEdit%25252fView%25253fdocUniqueIdentifier%25253dCO1.PCCNTR.6494769%252526prevCtxUrl%25253dhttps%2525253a%2525252f%2525252fwww.secop.gov.co%2525253a443%2525252fCO1ContractsManagement%2525252fTendering%2525252fProcurementContractManagement%2525252fIndex%252526prevCtxLbl%25253dContratos%25252b%26wct%3d2026-07-28T14%253a45%253a40Z%26TimeoutCookie%3dtrue&wa=wsignin1.0&wtrealm=https%3a%2f%2fwww.secop.gov.co%2fCO1ContractsManagement&wctx=rm%3d0%26id%3dpassive%26ru%3d%252fCO1ContractsManagement%252fTendering%252fProcurementContractEdit%252fView%253fdocUniqueIdentifier%253dCO1.PCCNTR.6494769%2526prevCtxUrl%253dhttps%25253a%25252f%25252fwww.secop.gov.co%25253a443%25252fCO1ContractsManagement%25252fTendering%25252fProcurementContractManagement%25252fIndex%2526prevCtxLbl%253dContratos%252b&wct=2026-07-28T14%3a45%3a40Z&TimeoutCookie=true
+
+leonardo.bastidas
+Secop@2025#28
+
+En el selector de Entidad se escoge GOBERNACIÓN DEL CAUCA

@@ -15,12 +15,14 @@ const path = require('path');
 const fs = require('fs');
 
 const config = require('./config/env');
-const { initDatabase } = require('./config/database');
+const { initDatabase, getDb } = require('./config/database');
 const { testRedisConnection } = require('./config/redis');
 const { initQueues, getEstadoColas } = require('./queues/queue-manager');
 const { auth, generarToken } = require('./api/middleware/auth');
 const { workflowLogger } = require('./utils/logger');
 const { FASES } = require('./queues/state-machine');
+const { generarCertificado, validarRequisitosDocumentos } = require('./certificate/generate');
+const { enviarCorreo } = require('./services/email-service');
 
 const log = workflowLogger('SERVER');
 
@@ -51,6 +53,17 @@ app.use('/api/', rateLimit({
 // Servir screenshots como estáticos
 app.use('/screenshots', express.static(path.join(__dirname, '../screenshots')));
 app.use('/storage', auth, express.static(path.join(__dirname, '../storage')));
+
+// Servir frontend del dashboard
+app.use(express.static(path.join(__dirname, 'dashboard')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard', 'dashboard.html'));
+});
+
+// Endpoint de HealthCheck para Docker
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // ==========================================
 // API Routes
@@ -159,6 +172,145 @@ app.post('/api/supervision/decidir', auth, async (req, res) => {
     io.emit('supervision:decision', { solicitudId, puntoControl, decision, supervisor: req.user.nombre });
 
     res.json({ exito: true, mensaje: `Solicitud #${solicitudId} ${decision}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Enriquecer datos del contrato (cédula, objeto, fechas, etc.) ---
+app.patch('/api/solicitudes/:id/datos', auth, async (req, res) => {
+  try {
+    const solicitudId = parseInt(req.params.id);
+    const s = solicitudes.obtener(solicitudId);
+    if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const {
+      cedula_nit, tipo_persona, objeto, supervisor, valor_total,
+      fecha_inicio, fecha_fin, entidad, secop_id, codigo_proceso
+    } = req.body;
+
+    // Actualizar datos en JSON y tipo
+    const datosActuales = s.datos_contrato_json ? JSON.parse(s.datos_contrato_json) : {};
+    const datosNuevos = {
+      ...datosActuales,
+      cedula_nit: cedula_nit || datosActuales.cedula_nit,
+      tipo: tipo_persona || datosActuales.tipo || 'natural',
+      objeto: objeto || datosActuales.objeto,
+      supervisor: supervisor || datosActuales.supervisor,
+      valor_total: valor_total || datosActuales.valor_total,
+      fecha_inicio: fecha_inicio || datosActuales.fecha_inicio,
+      fecha_fin: fecha_fin || datosActuales.fecha_fin,
+      entidad: entidad || datosActuales.entidad,
+      secop_id: secop_id || datosActuales.secop_id,
+      codigo_proceso: codigo_proceso || datosActuales.codigo_proceso
+    };
+
+    // Actualizar tabla con los nuevos datos y campos directos
+    getDb().prepare(`
+      UPDATE solicitudes SET
+        datos_contrato_json = ?,
+        tipo_persona = ?,
+        cedula_nit = ?,
+        codigo_proceso = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(JSON.stringify(datosNuevos), datosNuevos.tipo, cedula_nit || null, codigo_proceso || null, solicitudId);
+
+    auditoria.registrar(solicitudId, 'DATOS', 'DATOS_ENRIQUECIDOS',
+      `Datos del contrato actualizados: cédula=${cedula_nit}, tipo=${tipo_persona}`, 'info', req.user.id);
+
+    res.json({ exito: true, mensaje: 'Datos del contrato actualizados correctamente.', datos: datosNuevos });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Firma Digital del Abogado y Expedición ---
+app.post('/api/solicitudes/:id/firmar-abogado', auth, async (req, res) => {
+
+  try {
+    const solicitudId = parseInt(req.params.id);
+    const { decision, abogado, comentario } = req.body;
+    const s = solicitudes.obtener(solicitudId);
+    if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    if (decision === 'aprobado') {
+      const datosCertificado = {
+        solicitudId: `SOL-${s.id}`,
+        tipo: s.tipo_persona || 'natural',
+        codigoContrato: s.contrato,
+        numeroProceso: s.codigo_proceso || 'LP-2026-001',
+        nombre: s.contratista,
+        empresa: s.contratista,
+        cedula: s.cedula_nit || '10.555.777',
+        nit: s.cedula_nit || '900.123.456-7',
+        lugarExpedicion: 'Popayán',
+        objeto: 'Prestación de servicios profesionales e infraestructura tecnológica...',
+        numeroPago: String(s.numero_pago || '1'),
+        diaNum: String(new Date().getDate()),
+        diaLetras: 'veintisiete',
+        mes: 'julio',
+        anio: '2026',
+        proyecto: req.user.nombre || 'Analista SIA',
+        reviso: abogado || 'Abg. Dirección Jurídica',
+        itemsVerificados: { F1: true, R1: true, I1: true, P1: true }
+      };
+
+      const resCert = await generarCertificado(datosCertificado);
+
+      // Enviar correo con el adjunto
+      await enviarCorreo({
+        para: s.correo_solicitante || 'siadepartamento@cauca.gov.co',
+        asunto: `Certificado SIA Observa Firmado — Contrato ${s.contrato}`,
+        cuerpo: `Estimado(a) ${s.contratista},\n\nAdjunto a este correo encontrará el Certificado SIA Observa oficial con visto bueno y firma del abogado ${abogado || 'de la Dirección Jurídica'}.\n\nObservaciones: ${comentario || 'Aprobado sin novedades.'}\n\nAtentamente,\nGobernación del Cauca — SIA Observa`,
+        adjuntos: [{
+          nombre: resCert.nombreArchivo,
+          ruta: resCert.rutaCertificado,
+          tipo: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        }]
+      });
+
+      solicitudes.actualizarEstado(solicitudId, 'finalizado', 'completado', 100);
+      auditoria.registrar(solicitudId, 'FIRMA_ABOGADO', 'CERTIFICADO_FIRMADO_Y_ENVIADO',
+        `Aprobado y firmado por ${abogado || req.user.nombre}. Certificado .docx enviado a ${s.correo_solicitante || 'siadepartamento@cauca.gov.co'}`, 'success', req.user.id);
+      
+      io.emit('solicitud:firmada', { solicitudId, contrato: s.contrato, abogado });
+      return res.json({ exito: true, mensaje: 'Certificado firmado y enviado exitosamente por correo.', certificado: resCert });
+    } else {
+      solicitudes.actualizarEstado(solicitudId, 'rechazado', 'rechazado', 0);
+      auditoria.registrar(solicitudId, 'FIRMA_ABOGADO', 'RECHAZADO_POR_ABOGADO',
+        `Rechazado por ${abogado || req.user.nombre}: ${comentario || ''}`, 'warn', req.user.id);
+      
+      io.emit('solicitud:actualizada', { solicitudId, estado: 'rechazado' });
+      return res.json({ exito: true, mensaje: 'Solicitud rechazada por el abogado.' });
+    }
+  } catch (error) {
+    log.error(`Error en firmar-abogado: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Validar Requisitos (What-If Scenarios) ---
+app.post('/api/solicitudes/:id/validar-requisitos', auth, async (req, res) => {
+  try {
+    const solicitudId = parseInt(req.params.id);
+    const s = solicitudes.obtener(solicitudId);
+    if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const dictamen = validarRequisitosDocumentos({
+      numeroPago: s.numero_pago,
+      simularFaltaPago: req.body.simularFaltaPago || false,
+      simularFaltaInforme: req.body.simularFaltaInforme || false,
+      simularFaltaActa: req.body.simularFaltaActa || false
+    });
+
+    if (!dictamen.valido) {
+      solicitudes.actualizarEstado(solicitudId, dictamen.estadoRecomendado, 'rechazado', 0);
+      auditoria.registrar(solicitudId, 'VALIDACION_DOCUMENTOS', 'ALERTA_DOCUMENTOS_FALTANTES',
+        dictamen.razon, 'warn', req.user.id);
+    }
+
+    res.json({ exito: true, dictamen });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

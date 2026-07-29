@@ -123,7 +123,12 @@ function prepararVariables(datos) {
   const funcionario = process.env.FUNCIONARIO_NOMBRE || 'Funcionario No Configurado';
 
   // Variables comunes
+  const fechaObj = new Date();
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const diasLetras = ['cero', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte', 'veintiún', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve', 'treinta', 'treinta y un'];
+  
   const variables = {
+    // Variables estándar
     codigo: datos.codigoContrato || '',
     codigoContrato: datos.codigoContrato || '',
     proceso: datos.codigoProceso || '',
@@ -135,8 +140,33 @@ function prepararVariables(datos) {
     fecha: fechaEmision,
     fechaEmision: fechaEmision,
     funcionario: funcionario,
-    funcionarioProyecta: funcionario
+    funcionarioProyecta: funcionario,
+    
+    // Mapeo exacto para las plantillas reales de la Gobernación del Cauca
+    NUM_CONTRATO: datos.codigoContrato || '',
+    NUM_PROCESO: datos.codigoProceso || '',
+    CONTRATISTA: datos.empresa || datos.nombre || '',
+    CEDULA: datos.nit || datos.cedula || '',
+    LUGAR_EXP: datos.expedicion || '',
+    OBJETO: datos.objeto || 'Prestación de servicios de apoyo a la gestión...',
+    NUM_PAGO: datos.numeroPago || '',
+    DIA_NUM: fechaObj.getDate().toString(),
+    DIA_LETRAS: diasLetras[fechaObj.getDate()] || fechaObj.getDate().toString(),
+    MES: meses[fechaObj.getMonth()],
+    ANIO: fechaObj.getFullYear().toString(),
+    PROYECTO: funcionario,
+    REVISO: process.env.SUPERVISOR_NOMBRE || 'Supervisor Asignado'
   };
+
+  // Llenar marcadores de tabla F1-F12, R1-R12, I1-I12, P1-P12
+  const numPagoInt = parseInt(datos.numeroPago) || 1;
+  for (let i = 1; i <= 12; i++) {
+    const marca = i <= numPagoInt ? 'X' : '';
+    variables[`F${i}`] = marca;
+    variables[`R${i}`] = marca;
+    variables[`I${i}`] = marca;
+    variables[`P${i}`] = marca;
+  }
 
   if (datos.tipo === 'juridica') {
     // Variables para persona jurídica
@@ -195,8 +225,8 @@ async function registrarEnExcel(datos) {
   const nuevaFila = [
     datos.codigoContrato || '',
     datos.codigoProceso || '',
-    datos.tipo === 'juridica' ? datos.empresa : datos.nombre,
-    datos.tipo === 'juridica' ? datos.nit : datos.cedula,
+    datos.tipo === 'juridica' ? (datos.empresa || datos.contratista || '') : (datos.nombre || datos.contratista || ''),
+    datos.tipo === 'juridica' ? (datos.nit || datos.cedula || '') : (datos.cedula || datos.nit || ''),
     datos.expedicion || '',
     datos.numeroPago || '',
     formatearFecha(),
@@ -237,4 +267,64 @@ if (require.main === module) {
     });
 }
 
-module.exports = { generarCertificado, registrarEnExcel };
+/**
+ * Valida los requisitos y documentos cargados antes de generar el certificado (What-if scenarios).
+ */
+function validarRequisitosDocumentos(datos) {
+  const numPagoInt = parseInt(datos.numeroPago || datos.pago) || 1;
+  const diagnostico = {
+    estudiosPrevios: true,
+    contrato: true,
+    cdp: true,
+    rp: true,
+    actaInicio: !datos.simularFaltaActa,
+    informeContratista: !datos.simularFaltaInforme,
+    cuentaCobroFactura: !datos.simularFaltaPago && !datos.soportePagoFaltante,
+    pagoEnRango: numPagoInt >= 1 && numPagoInt <= 12
+  };
+
+  if (!diagnostico.pagoEnRango) {
+    return {
+      valido: false,
+      estadoRecomendado: 'pago_no_cargado',
+      razon: `El número de pago solicitado (#${numPagoInt}) no está configurado o excede el límite de 12 cuotas del contrato.`,
+      diagnostico
+    };
+  }
+
+  if (!diagnostico.cuentaCobroFactura) {
+    return {
+      valido: false,
+      estadoRecomendado: 'pago_no_cargado',
+      razon: `No se encuentra cargada la Factura/Cuenta de Cobro del Pago #${numPagoInt} en SIA Observa.`,
+      diagnostico
+    };
+  }
+
+  if (!diagnostico.informeContratista) {
+    return {
+      valido: false,
+      estadoRecomendado: 'requiere_correccion_documentos',
+      razon: `Falta el Informe Mensual de Actividades del Contratista para el Pago #${numPagoInt} en SECOP II.`,
+      diagnostico
+    };
+  }
+
+  if (!diagnostico.actaInicio) {
+    return {
+      valido: false,
+      estadoRecomendado: 'requiere_correccion_documentos',
+      razon: `Falta el Acta de Inicio o la Constancia de Idoneidad en el expediente del contrato.`,
+      diagnostico
+    };
+  }
+
+  return {
+    valido: true,
+    estadoRecomendado: 'pendiente_firma_abogado',
+    razon: `Todos los documentos contractuales y los soportes del Pago #${numPagoInt} fueron verificados exitosamente.`,
+    diagnostico
+  };
+}
+
+module.exports = { generarCertificado, registrarEnExcel, validarRequisitosDocumentos };

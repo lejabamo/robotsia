@@ -16,10 +16,11 @@ const { workflowLogger } = require('../utils/logger');
 const log = workflowLogger('WF-05');
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  baseURL: process.env.OPENAI_BASE_URL || 'http://ollama:11434/v1',
+  apiKey: process.env.OPENAI_API_KEY || 'ollama' // required but unused
 });
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const MODEL = process.env.OPENAI_MODEL || 'llama3.1'; // Modelo local por defecto
 
 /**
  * Extrae datos estructurados de un correo de solicitud de certificado.
