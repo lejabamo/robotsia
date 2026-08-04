@@ -76,9 +76,11 @@ async function generarCertificado(datos, options = {}) {
     });
 
     // Generar nombre del archivo
-    const nombreBase = datos.tipo === 'juridica'
-      ? `${datos.codigoContrato}-${sanitizarNombreArchivo(datos.empresa || datos.nombre)}-Pago${datos.numeroPago}`
-      : `${datos.codigoContrato}-${sanitizarNombreArchivo(datos.nombre)}-Pago${datos.numeroPago}`;
+    const nombreParaArchivo = datos.tipo === 'juridica' 
+      ? (datos.empresa || datos.nombre || datos.contratista || 'SinNombre')
+      : (datos.nombre || datos.contratista || 'SinNombre');
+
+    const nombreBase = `${datos.codigoContrato || 'SinContrato'}-${sanitizarNombreArchivo(nombreParaArchivo)}-Pago${datos.numeroPago || '0'}`;
 
     const nombreArchivo = `${nombreBase}.docx`;
     const rutaSalida = path.join(outputDir, nombreArchivo);
@@ -225,13 +227,13 @@ async function registrarEnExcel(datos) {
   const nuevaFila = [
     datos.codigoContrato || '',
     datos.codigoProceso || '',
-    datos.tipo === 'juridica' ? (datos.empresa || datos.contratista || '') : (datos.nombre || datos.contratista || ''),
+    datos.tipo === 'juridica' ? (datos.empresa || datos.nombre || datos.contratista || '') : (datos.nombre || datos.contratista || ''),
     datos.tipo === 'juridica' ? (datos.nit || datos.cedula || '') : (datos.cedula || datos.nit || ''),
     datos.expedicion || '',
     datos.numeroPago || '',
     formatearFecha(),
     process.env.FUNCIONARIO_NOMBRE || '',
-    datos.tipo === 'natural' ? 'Persona Natural' : 'Persona Jurídica'
+    datos.tipo === 'natural' ? 'Persona Natural' : (datos.tipo === 'juridica' ? 'Persona Jurídica' : 'No Determinado')
   ];
 
   XLSX.utils.sheet_add_aoa(ws, [nuevaFila], { origin: -1 });

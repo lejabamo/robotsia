@@ -103,7 +103,11 @@ async function transicionar(solicitudId, nuevoEstado) {
 
   const estadoActual = solicitud.estado;
 
-  if (!puedeTransicionar(estadoActual, nuevoEstado)) {
+  if (estadoActual === nuevoEstado) {
+    return; // Ignorar transición si ya está en el estado solicitado (útil en retries automáticos)
+  }
+
+  if (estadoActual !== 'error' && !puedeTransicionar(estadoActual, nuevoEstado)) {
     throw new Error(`Transición inválida: ${estadoActual} → ${nuevoEstado}`);
   }
 

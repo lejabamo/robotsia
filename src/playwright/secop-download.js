@@ -10,7 +10,9 @@
  * USO: node secop-download.js --contrato "2025-OPS-015" --output "./downloads"
  */
 
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-extra');
+const stealth = require('puppeteer-extra-plugin-stealth')();
+chromium.use(stealth);
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
@@ -56,6 +58,13 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
   });
 
   const page = await context.newPage();
+  page.on('response', response => {
+    const url = response.url();
+    if (response.status() >= 400 || url.includes('Search') || url.includes('Login') || url.includes('CompanySelectedIndexChanged') || url.includes('ChooseInformation')) {
+      log.info(`[NETWORK] ${response.request().method()} ${url} - Status: ${response.status()}`);
+    }
+  });
+
   page.setDefaultTimeout(timeout);
 
   const archivosDescargados = {};
@@ -119,9 +128,76 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
         await passInput.press('Enter');
       }
 
-      // Esperar a que cargue el dashboard (ej. la barra de búsqueda global)
-      await page.waitForSelector('#quickSearchGlobal, .home-dashboard, #UserNameSpan', { state: 'attached', timeout: 30000 });
-      log.info('Login exitoso en SECOP II');
+      // Verificar login y Manejar pantalla intermedia
+      try {
+        await page.waitForSelector('.home-dashboard, #UserNameSpan, :has-text("Seleccionar la Entidad Estatal"), #divEntitySelection, :has-text("Leonardo Javier")', { state: 'visible', timeout: 30000 });
+      } catch (err) {
+        log.warn("No se detectó confirmación visual de login, grabando HTML...");
+        require('fs').writeFileSync(require('path').join(outputDir, `debug_login_timeout_${Date.now()}.html`), await page.content());
+        throw err;
+      }
+
+      try {
+        log.info("Intentando seleccionar GOBERNACIÓN DEL CAUCA (vía Leonardo Javier)...");
+        await page.waitForTimeout(2000);
+        const leonardoLink = await page.$('text="Leonardo Javier"');
+        if (leonardoLink) {
+          log.info("Se encontró 'Leonardo Javier', haciendo clic...");
+          await leonardoLink.click({ force: true });
+          await page.waitForTimeout(2000);
+          
+          const gobLink = await page.$('text=/gobernaci/i');
+          if (gobLink) {
+             log.info("Se encontró 'Gobernación', haciendo clic...");
+             await Promise.all([
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
+                gobLink.click({ force: true })
+             ]);
+          } else {
+             log.warn("No se encontró 'Gobernación' en el menú de Leonardo Javier");
+             require('fs').writeFileSync(require('path').join(outputDir, `debug_entidad_${Date.now()}.html`), await page.content());
+          }
+        } else {
+          // Fallback a selects
+          const entitySelects = await page.$$('select');
+          let optionFound = false;
+          for (const select of entitySelects) {
+            const options = await select.$$eval('option', opts => opts.map(o => ({ value: o.value, text: o.textContent })));
+            const gobOption = options.find(o => o.text.toUpperCase().includes('GOBERNACIÓN DEL CAUCA') || o.text.toUpperCase().includes('GOBERNACION DEL CAUCA'));
+            if (gobOption) {
+              await select.selectOption(gobOption.value);
+              optionFound = true;
+              log.info("Seleccionada GOBERNACIÓN DEL CAUCA del select. Esperando AJAX...");
+              
+              // Esperar a que termine la petición AJAX disparada por el onchange del select
+              await page.waitForResponse(resp => resp.url().includes('CompanySelectedIndexChanged') && resp.status() === 200, { timeout: 15000 }).catch(() => log.warn("Timeout esperando CompanySelectedIndexChanged"));
+              await page.waitForTimeout(2000); // Dar tiempo al DOM para re-renderizar
+              
+              // Buscar botón Entrar y hacer clic
+              const entrarBtn = await page.$('#btnButton1, input[value="Entrar"], input[title="Entrar"]');
+              if (entrarBtn) {
+                log.info("Haciendo clic en el botón Entrar (#btnButton1)...");
+                await Promise.all([
+                  page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async () => { log.warn("Timeout de navegacion al hacer clic en Entrar. URL actual: " + page.url()); await page.screenshot({ path: require('path').join(SCREENSHOTS_DIR, 'debug_post_timeout_entrar.png'), fullPage: true }); }),
+                  entrarBtn.click({ force: true })
+                ]);
+              } else {
+                log.warn("No se encontró el botón Entrar después del select.");
+              }
+              break;
+            }
+          }
+          if (!optionFound) {
+             log.warn("No se encontró la opción de GOBERNACIÓN DEL CAUCA en los selects.");
+             require('fs').writeFileSync(require('path').join(outputDir, `debug_entidad_${Date.now()}.html`), await page.content());
+          }
+        }
+      } catch (err) {
+        log.warn("Error al intentar seleccionar la entidad, continuando... " + err.message);
+      }
+
+      log.info('Login exitoso en SECOP II, grabando HTML y screenshot del dashboard...');
+      require('fs').writeFileSync(require('path').join(SCREENSHOTS_DIR, `debug_dashboard_exitoso_${Date.now()}.html`), await page.content());
     }, {
       operacion: 'Login SECOP II',
       maxRetries: 3
@@ -137,28 +213,65 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
     // Paso 2: Buscar contrato
     // ============================
     await conReintentos(async () => {
-      log.info(`Paso 2: Buscando contrato ${codigoContrato}...`);
+      try {
+        log.info(`Paso 2: Buscando contrato ${codigoContrato}... URL actual: ${page.url()}`);
 
-      // Usar la barra de búsqueda global del header
-      const searchInput = await page.waitForSelector('#quickSearchGlobal', { state: 'attached', timeout: 15000 });
-      await searchInput.fill(codigoContrato, { force: true });
-      await searchInput.press('Enter', { force: true });
+        // Usar la barra de búsqueda global del header
+        const searchInput = await page.waitForSelector('#quickSearchGlobal', { state: 'attached', timeout: 15000 });
+        await searchInput.fill(codigoContrato, { force: true });
+        
+        // Take screenshot before searching
+        await page.screenshot({ path: require('path').join(SCREENSHOTS_DIR, `secop_search_before_${Date.now()}.png`) });
+        
+        await searchInput.press('Enter', { force: true });
 
-      // Esperar la lista de resultados
-      await page.waitForTimeout(3000);
+        // Esperar la lista de resultados
+        await page.waitForTimeout(5000);
+        
+        // Take screenshot of search results
+        await page.screenshot({ path: require('path').join(SCREENSHOTS_DIR, `secop_search_results_${Date.now()}.png`) });
+        require('fs').writeFileSync(require('path').join(SCREENSHOTS_DIR, `secop_search_results_${Date.now()}.html`), await page.content());
 
-      // Hacer clic en el resultado del contrato (a href con el código)
-      const resultado = await page.waitForSelector(
-        `a:has-text("${codigoContrato}")`,
-        { timeout: 15000 }
-      );
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => log.warn("Timeout waiting for contract page")),
-        resultado.click()
-      ]);
-      await page.waitForTimeout(2000);
-
-      log.info(`Contrato ${codigoContrato} encontrado`);
+        // --- INYECCION INGENIERIA DE NAVEGACION ---
+        log.info("--- INICIANDO DIAGNÓSTICO DE NAVEGACIÓN ---");
+        const diagInfo = { url_antes: page.url(), title_antes: await page.title() };
+        
+        const detalleLink = page.locator(`tr:has-text("${codigoContrato}") a[title="Detalle"], tr:has-text("${codigoContrato}") a:has-text("Detalle")`).first();
+        
+        if (await detalleLink.count() === 0) {
+            log.error("No se encontró el enlace Detalle para el contrato.");
+            process.exit(1);
+        }
+        
+        diagInfo.href = await detalleLink.getAttribute('href');
+        log.info("Enlace 'Detalle' encontrado. href: " + diagInfo.href);
+        
+        const popupPromise = page.waitForEvent('popup', { timeout: 15000 }).catch(() => null);
+        const mainNavPromise = page.waitForNavigation({waitUntil: 'domcontentloaded', timeout: 15000}).catch(() => null);
+        
+        await detalleLink.click();
+        log.info("Clic ejecutado. Esperando...");
+        
+        const results = await Promise.all([popupPromise, mainNavPromise]);
+        await page.waitForTimeout(5000); 
+        
+        let activePage = results[0] || page;
+        
+        diagInfo.url_despues = activePage.url();
+        diagInfo.title_despues = await activePage.title();
+        diagInfo.tipo_nav = results[0] ? "NUEVA_PESTANA" : (results[1] !== null ? "MAIN_FRAME" : "SIN_NAVEGACION_DETECTADA");
+        diagInfo.iframes_despues = activePage.frames().length;
+        
+        require('fs').writeFileSync(require('path').join(SCREENSHOTS_DIR, 'nav_diagnostico.json'), JSON.stringify(diagInfo, null, 2));
+        await activePage.screenshot({ path: require('path').join(SCREENSHOTS_DIR, 'nav_despues.png'), fullPage: true });
+        require('fs').writeFileSync(require('path').join(SCREENSHOTS_DIR, 'nav_despues.html'), await activePage.content());
+        
+        log.info("DIAGNOSTICO FINALIZADO: " + JSON.stringify(diagInfo, null, 2));
+        
+      } catch (err) {
+        log.warn("Falla en Paso 2. URL actual: " + page.url() + " | Error: " + err.message); await page.screenshot({ path: require('path').join(SCREENSHOTS_DIR, 'debug_falla_paso2_url.png'), fullPage: true });
+        throw err;
+      }
     }, {
       operacion: 'Buscar contrato SECOP II',
       maxRetries: 3
@@ -171,72 +284,104 @@ async function descargarDocumentosSecop(codigoContrato, outputDir, options = {})
     });
 
     // ============================
-    // Paso 3: Descargar documentos
+    // Paso 3: Descargar documentos de Ejecución
     // ============================
-    for (const doc of documentosRequeridos) {
-      log.info(`Paso 3: Descargando ${doc.etiqueta}...`);
+    const resultadosDescarga = [];
+    let documentosEncontrados = 0;
+    let documentosDescargados = 0;
+    let documentosFallidos = 0;
 
-      try {
-        await conReintentos(async () => {
-          // Buscar el enlace o botón de descarga del documento
-          // NOTA: Los selectores deben ajustarse según la interfaz real de SECOP II
-          const downloadLink = await page.waitForSelector(
-            `a:has-text("${doc.etiqueta}"), button:has-text("${doc.etiqueta}"), [title*="${doc.etiqueta}"]`,
-            { timeout: 10000 }
-          );
-
-          // Iniciar descarga
-          const [download] = await Promise.all([
-            page.waitForEvent('download', { timeout: 30000 }),
-            downloadLink.click()
-          ]);
-
-          // Guardar archivo
-          const rutaDestino = path.join(outputDir, `${codigoContrato}_${doc.archivo}`);
-          await download.saveAs(rutaDestino);
-
-          // Verificar que el archivo se descargó correctamente
-          const stats = fs.statSync(rutaDestino);
-          if (stats.size === 0) {
-            throw new Error(`Archivo ${doc.archivo} descargado está vacío`);
+    try {
+      log.info("Navegando a la sección 'Ejecución del contrato'...");
+      const stepDiv7 = page.locator('#stepDiv_7');
+      const navPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => null);
+      
+      await stepDiv7.click({ force: true });
+      await navPromise;
+      await page.waitForTimeout(5000); // Esperar que el panel y las tablas existan
+      log.info("Sección de Ejecución del contrato abierta.");
+      
+      // Buscar todos los enlaces que comiencen con lnkDownloadExecutionDocument_
+      const downloadLinks = page.locator('[id^="lnkDownloadExecutionDocument_"]');
+      const count = await downloadLinks.count();
+      documentosEncontrados = count;
+      log.info(`Se encontraron ${count} documentos para descargar.`);
+      
+      for (let i = 0; i < count; i++) {
+        const link = downloadLinks.nth(i);
+        const index = i;
+        let nombre_archivo = null;
+        let tamano = 0;
+        let errorMsg = null;
+        
+        log.info(`Intentando descargar documento ${index}...`);
+        try {
+          // Promise para el evento de descarga
+          const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+          await link.click({ force: true });
+          const download = await downloadPromise;
+          
+          if (download) {
+            let suggested = download.suggestedFilename();
+            if (!suggested || suggested === 'download') {
+                suggested = `Documento_${index}.pdf`;
+            }
+            nombre_archivo = `${codigoContrato}_Doc${index}_${suggested}`;
+            
+            let downloadPath = require('path').join(outputDir, nombre_archivo);
+            let counter = 1;
+            while (require('fs').existsSync(downloadPath)) {
+                const ext = require('path').extname(nombre_archivo);
+                const base = require('path').basename(nombre_archivo, ext);
+                downloadPath = require('path').join(outputDir, `${base}_v${counter}${ext}`);
+                counter++;
+            }
+            nombre_archivo = require('path').basename(downloadPath);
+            
+            await download.saveAs(downloadPath);
+            const stats = require('fs').statSync(downloadPath);
+            tamano = stats.size;
+            documentosDescargados++;
+            log.info(`Documento ${index} descargado exitosamente: ${nombre_archivo} (${tamano} bytes)`);
+          } else {
+             throw new Error("No se detectó evento de descarga");
           }
-
-          archivosDescargados[doc.nombre] = {
-            ruta: rutaDestino,
-            tamano: stats.size,
-            nombre: `${codigoContrato}_${doc.archivo}`
-          };
-
-          log.info(`${doc.etiqueta} descargado exitosamente (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-        }, {
-          operacion: `Descargar ${doc.etiqueta}`,
-          maxRetries: 3
+        } catch (e) {
+          log.error(`Error descargando documento ${index}: ${e.message}`);
+          errorMsg = e.message;
+          documentosFallidos++;
+        }
+        
+        resultadosDescarga.push({
+           indice: index,
+           nombre: nombre_archivo || 'Desconocido',
+           tamano_bytes: tamano,
+           exito: errorMsg === null,
+           error: errorMsg
         });
-      } catch (error) {
-        log.error(`Error descargando ${doc.etiqueta}: ${error.message}`);
-        archivosDescargados[doc.nombre] = { error: error.message };
       }
+    } catch (err) {
+      log.warn("Falla en Paso 3: " + err.message);
+      await page.screenshot({ path: require('path').join(SCREENSHOTS_DIR, `debug_falla_paso3_${Date.now()}.png`), fullPage: true });
+      throw err;
     }
 
     // ============================
     // Paso 4: Verificación final
     // ============================
-    const descargasExitosas = Object.values(archivosDescargados).filter(d => !d.error);
-    log.info(`Descarga completada: ${descargasExitosas.length}/4 documentos exitosos`);
+    log.info(`Descarga completada. Resumen: Encontrados: ${documentosEncontrados}, Descargados: ${documentosDescargados}, Fallidos: ${documentosFallidos}`);
 
-    if (descargasExitosas.length < 4) {
-      const fallidos = Object.entries(archivosDescargados)
-        .filter(([, v]) => v.error)
-        .map(([k, v]) => `${k}: ${v.error}`)
-        .join('; ');
+    if (documentosFallidos > 0) {
+      const fallidos = resultadosDescarga.filter(d => !d.exito).map(d => `Doc ${d.indice}: ${d.error}`).join('; ');
       log.warn(`Documentos con error: ${fallidos}`);
     }
 
     return {
-      exito: descargasExitosas.length === 4,
-      archivos: archivosDescargados,
-      descargasExitosas: descargasExitosas.length,
-      totalRequeridas: 4
+      exito: documentosDescargados > 0 && documentosFallidos === 0,
+      resultados: resultadosDescarga,
+      encontrados: documentosEncontrados,
+      descargados: documentosDescargados,
+      fallidos: documentosFallidos
     };
 
   } catch (error) {
