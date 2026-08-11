@@ -10,7 +10,8 @@
     "dev:workers": "nodemon src/workers/start-all.js",
     "dashboard": "node src/server.js",
     "setup": "node src/config/setup.js",
-    "test": "node src/tests/test-workflow.js"
+    "test": "node src/tests/test-workflow.js",
+    "test:v2": "jest src/v2/tests --passWithNoTests"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -40,6 +41,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "jest": "^30.4.2",
     "nodemon": "^3.1.7"
   },
   "engines": {
